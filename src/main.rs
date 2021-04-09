@@ -1,49 +1,67 @@
-use bevy::{prelude::*, render::pass::ClearColor};
-mod consts {
-    pub const MAX_BOARD_WIDTH: i32 = 31;
-    pub const MAX_BOARD_HEIGHT: i32 = 16;
-    pub const STATUS_HEIGHT: i32 = 2;
-    pub const PIXELS: i32 = 16;
+use bevy::core::FixedTimestep;
+use bevy::prelude::*;
+use bevy::render::pass::ClearColor;
+
+const WINDOW_HEIGHT: u32 = 500;
+const WINDOW_WIDTH: u32 = 500;
+
+const ARENA_HEIGHT: u32 = 10;
+const ARENA_WIDTH: u32 = 10;
+
+const SPRITE_HEIGHT: u32 = WINDOW_HEIGHT / ARENA_HEIGHT;
+const SPRITE_WIDTH: u32 = WINDOW_WIDTH / ARENA_WIDTH;
+
+#[derive(SystemLabel, Debug, Hash, PartialEq, Eq, Clone)]
+pub enum SnakeMovement {
+    Input,
+    Movement,
 }
 
-fn main() {
-    let mut app = App::build();
-    app.add_plugins(DefaultPlugins)
-        .insert_resource(ClearColor(Color::rgb(0.04, 0.04, 0.04)));
-    #[cfg(target_arch = "wasm32")]
-    app.add_plugin(bevy_webgl2::WebGL2Plugin);
-    app.add_startup_system(setup.system())
-    .add_startup_stage("game_setup", SystemStage::single(spawn_rocket.system()))
-    .add_system(rocket_movement.system())
-    .add_system(rocket_direction_control.system())
-    .run();
+#[derive(Default, Copy, Clone, Eq, PartialEq, Hash)]
+struct Position {
+    x: i32,
+    y: i32,
+}
+
+struct Size {
+    width: f32,
+    height: f32,
+}
+impl Size {
+    pub fn square(x: f32) -> Self {
+        Self {
+            width: x,
+            height: x,
+        }
+    }
 }
 
 struct Rocket {
     direction: Direction,
 }
 
-struct Scoreboard {
-    score: usize,
-}
 
+#[derive(PartialEq, Copy, Clone)]
 enum Direction {
     Left,
-    Right,
     Up,
+    Right,
     Down,
 }
 
-enum Collider {
-    Solid,
-    Door,
-    Rocket,
+impl Direction {
+    fn opposite(self) -> Self {
+        match self {
+            Self::Left => Self::Right,
+            Self::Right => Self::Left,
+            Self::Up => Self::Down,
+            Self::Down => Self::Up,
+        }
+    }
 }
 
 fn setup(mut commands: Commands) {
-    // cameras
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
-    commands.spawn_bundle(UiCameraBundle::default());
 }
 
 fn spawn_rocket(
@@ -52,47 +70,123 @@ fn spawn_rocket(
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
     let texture_handle = asset_server.load("icon.png");
-    commands
-        .spawn_bundle(SpriteBundle {
-            material: materials.add(texture_handle.into()),
-            sprite: Sprite::new(Vec2::new(16.0, 16.0)),
+        commands
+            .spawn_bundle(SpriteBundle {
+                material: materials.add(texture_handle.into()),
+                sprite: Sprite::new(Vec2::new(SPRITE_WIDTH as f32, SPRITE_HEIGHT as f32)),
+                ..Default::default()
+            })
+            .insert(Rocket {
+                direction: Direction::Up,
+            })
+            .insert(Position { x: 3, y: 3 })
+            .insert(Size::square(0.8))
+            .id();
+}
+
+fn snake_movement_input(keyboard_input: Res<Input<KeyCode>>, mut heads: Query<&mut Rocket>) {
+    if let Some(mut head) = heads.iter_mut().next() {
+        let dir: Direction = if keyboard_input.pressed(KeyCode::Left) {
+            Direction::Left
+        } else if keyboard_input.pressed(KeyCode::Down) {
+            Direction::Down
+        } else if keyboard_input.pressed(KeyCode::Up) {
+            Direction::Up
+        } else if keyboard_input.pressed(KeyCode::Right) {
+            Direction::Right
+        } else {
+            head.direction
+        };
+        if dir != head.direction.opposite() {
+            head.direction = dir;
+        }
+    }
+}
+
+fn snake_movement(mut heads: Query<(&mut Position, &Rocket)>) {
+    if let Some((mut head_pos, head)) = heads.iter_mut().next() {
+        match &head.direction {
+            Direction::Left => {
+                if head_pos.x > 0{
+                    head_pos.x -= 1;
+                }
+            }
+            Direction::Right => {
+                if head_pos.x < ARENA_WIDTH as i32 - 1{
+                    head_pos.x += 1;
+                }
+            }
+            Direction::Up => {
+                if head_pos.y < ARENA_HEIGHT as i32 - 1{
+                    head_pos.y += 1;
+                }
+            }
+            Direction::Down => {
+                if head_pos.y > 0{
+                head_pos.y -= 1;
+                }
+            }
+        };
+    }
+}
+
+
+fn size_scaling(windows: Res<Windows>, mut q: Query<(&Size, &mut Sprite)>) {
+    let window = windows.get_primary().unwrap();
+    for (sprite_size, mut sprite) in q.iter_mut() {
+        sprite.size = Vec2::new(
+            sprite_size.width / ARENA_WIDTH as f32 * window.width() as f32,
+            sprite_size.height / ARENA_HEIGHT as f32 * window.height() as f32,
+        );
+    }
+}
+
+fn position_translation(windows: Res<Windows>, mut q: Query<(&Position, &mut Transform)>) {
+    fn convert(pos: f32, bound_window: f32, bound_game: f32) -> f32 {
+        let tile_size = bound_window / bound_game;
+        pos / bound_game * bound_window - (bound_window / 2.) + (tile_size / 2.)
+    }
+    let window = windows.get_primary().unwrap();
+    for (pos, mut transform) in q.iter_mut() {
+        transform.translation = Vec3::new(
+            convert(pos.x as f32, window.width() as f32, ARENA_WIDTH as f32),
+            convert(pos.y as f32, window.height() as f32, ARENA_HEIGHT as f32),
+            0.0,
+        );
+    }
+}
+
+fn main() {
+    let mut app = App::build();
+    app.insert_resource(ClearColor(Color::rgb(0.04, 0.04, 0.04)))
+        .insert_resource(WindowDescriptor {
+            title: "PARALLEL UNIVERSES".to_string(),
+            width: WINDOW_WIDTH as f32,
+            height: WINDOW_HEIGHT as f32,
             ..Default::default()
         })
-        .insert(Rocket {
-            direction: Direction::Down,
-        });
-}
+        .add_startup_system(setup.system())
+        .add_startup_stage("game_setup", SystemStage::single(spawn_rocket.system()))
+        .add_system(
+            snake_movement_input
+                .system()
+                .label(SnakeMovement::Input)
+                .before(SnakeMovement::Movement),
+        )
+        .add_system_set(
+            SystemSet::new()
+                .with_run_criteria(FixedTimestep::step(0.050))
+                .with_system(snake_movement.system().label(SnakeMovement::Movement))
+        )
+        .add_system_set_to_stage(
+            CoreStage::PostUpdate,
+            SystemSet::new()
+                .with_system(position_translation.system())
+                .with_system(size_scaling.system()),
+        )
+        .add_plugins(DefaultPlugins);
 
-fn rocket_movement(mut rocket_position: Query<(&Rocket, &mut Transform)>) {
-        
-    for (rocket, mut transform) in rocket_position.iter_mut() {
-        match rocket.direction {
-            Direction::Up => transform.translation.y += 2.,
-            Direction::Down => transform.translation.y -= 2.,
-            Direction::Right => transform.translation.x += 2.,
-            Direction::Left => transform.translation.x -= 2.,
-        }
-        
-    }
-}
-
-fn rocket_direction_control(
-    keyboard_input: Res<Input<KeyCode>>,
-    mut query: Query<&mut Rocket>,
-) {
-
-    if let Ok(mut rocket) = query.single_mut() {
-        if keyboard_input.pressed(KeyCode::Left) {
-            rocket.direction = Direction::Left;
-        }
-        if keyboard_input.pressed(KeyCode::Right) {
-            rocket.direction = Direction::Right;
-        }
-        if keyboard_input.pressed(KeyCode::Down) {
-            rocket.direction = Direction::Down
-        }
-        if keyboard_input.pressed(KeyCode::Up) {
-            rocket.direction = Direction::Up;
-        }
-    }
+        #[cfg(target_arch = "wasm32")]
+        app.add_plugin(bevy_webgl2::WebGL2Plugin);
+        app.run();
 }
