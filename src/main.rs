@@ -12,6 +12,8 @@ const SPRITE_WIDTH: u32 = 32;
 const WINDOW_HEIGHT: u32 = (ARENA_HEIGHT + SCORE_BOARD_HEIGHT) * SPRITE_HEIGHT;
 const WINDOW_WIDTH: u32 = ARENA_WIDTH * SPRITE_WIDTH;
 
+const MAX_TURNS: u32 = 10;
+
 #[derive(SystemLabel, Debug, Hash, PartialEq, Eq, Clone)]
 pub enum RocketMovement {
     Input,
@@ -39,7 +41,11 @@ impl Size {
 
 struct Rocket {
     direction: Direction,
+    turns_left: u32,
 }
+
+#[derive(Default)]
+struct RocketPath(Vec<Position>);
 
 struct Wall {}
 struct Target {}
@@ -101,9 +107,9 @@ fn spawn_target(
 
 fn setup(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
     let level_data: Vec<String> = vec![
-        "          WWWW        ".to_string(),
+        "          WWWW       T".to_string(),
         "   WWWW   WWWW        ".to_string(),
-        "   WWWW   WWWW    T   ".to_string(),
+        "   WWWW   WWWW        ".to_string(),
         "   WWWW   WWWW        ".to_string(),
         "   WWWW   WWWW        ".to_string(),
         "   WWWW   WWWW   WWWWW".to_string(),
@@ -175,6 +181,7 @@ fn spawn_rocket(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    mut rocket_path: ResMut<RocketPath>,
 ) {
     let texture_handle = asset_server.load("icon.png");
     commands
@@ -185,10 +192,12 @@ fn spawn_rocket(
         })
         .insert(Rocket {
             direction: Direction::StandStill,
+            turns_left: MAX_TURNS,
         })
         .insert(Position { x: 1, y: 1 })
         .insert(Size::square(0.8))
         .id();
+    rocket_path.0 = vec![];
 }
 
 fn rocket_movement_input(keyboard_input: Res<Input<KeyCode>>, mut rockets: Query<&mut Rocket>) {
@@ -198,6 +207,10 @@ fn rocket_movement_input(keyboard_input: Res<Input<KeyCode>>, mut rockets: Query
     let down = keyboard_input.pressed(KeyCode::Down) || keyboard_input.pressed(KeyCode::S);
 
     if let Some(mut rocket) = rockets.iter_mut().next() {
+        if rocket.turns_left <= 0 {
+            return;
+        }
+        let old_dir = rocket.direction.clone();
         let dir: Direction = if left {
             Direction::Left
         } else if down {
@@ -212,15 +225,20 @@ fn rocket_movement_input(keyboard_input: Res<Input<KeyCode>>, mut rockets: Query
         if dir != rocket.direction.opposite() {
             rocket.direction = dir;
         }
+
+        if rocket.direction != old_dir {
+            rocket.turns_left -= 1;
+        }
+        println!("turns left: {}", rocket.turns_left);
     }
 }
-// Query<(&mut Position, &Rocket)>, Query<&Position, With<Wall>>
 fn rocket_movement(
     mut rocket_query: Query<(&Rocket, &mut Position)>,
     collider_query: Query<&Transform, With<Wall>>,
     target_query: Query<&Transform, With<Target>>,
     windows: Res<Windows>,
     mut target_writer: EventWriter<TargetEvent>,
+    mut rocket_path: ResMut<RocketPath>,
 ) {
     let window = windows.get_primary().unwrap();
     if let Some((rocket, mut rocket_pos)) = rocket_query.iter_mut().next() {
@@ -261,9 +279,10 @@ fn rocket_movement(
                 no_collision = false;
             }
         }
-        if no_collision {
+        if no_collision && rocket.direction != Direction::StandStill {
             rocket_pos.x = next_position.x;
             rocket_pos.y = next_position.y;
+            rocket_path.0.push(rocket_pos.clone());
         }
 
         for target_transform in target_query.iter() {
@@ -318,15 +337,35 @@ fn position_translation(windows: Res<Windows>, mut q: Query<(&Position, &mut Tra
 }
 
 fn reached_target(
+    mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>,
     mut reader: EventReader<TargetEvent>,
     mut rocket_query: Query<(&mut Rocket, &mut Position)>,
+    mut segments: ResMut<RocketPath>
 ) {
     if reader.iter().next().is_some() {
         //TODO: update score
         if let Some((mut rocket, mut rocket_pos)) = rocket_query.iter_mut().next() {
             rocket.direction = Direction::StandStill;
+
+            for i in 1..segments.0.len() - 1{
+                let previous = segments.0[i-1];
+                let middle = segments.0[i];
+                let next = segments.0[i+1];
+
+                if previous.x != next.x && previous.y != next.y{
+                    spawn_wall(
+                        &mut commands,
+                        &mut materials,
+                        Color::rgb(0.4,0.4,0.4),
+                        middle,
+                    );
+                }
+            }
+
+            rocket.turns_left = MAX_TURNS;
             rocket_pos.x = 1;
             rocket_pos.y = 1;
+            segments.0.clear();
         }
     }
 }
@@ -340,6 +379,7 @@ fn main() {
             height: WINDOW_HEIGHT as f32,
             ..Default::default()
         })
+        .insert_resource(RocketPath::default())
         .add_startup_system(setup.system())
         .add_startup_stage("game_setup", SystemStage::single(spawn_rocket.system()))
         .add_system(
