@@ -1,7 +1,6 @@
 use bevy::core::FixedTimestep;
 use bevy::prelude::*;
 use bevy::render::pass::ClearColor;
-use bevy::sprite::TextureAtlas;
 
 const SCORE_BOARD_HEIGHT: u32 = 2;
 const ARENA_HEIGHT: u32 = 16;
@@ -76,12 +75,33 @@ impl Direction {
 fn spawn_wall(
     commands: &mut Commands,
     materials: &mut ResMut<Assets<ColorMaterial>>,
-    wall_color: Color,
+    asset_server: &Res<AssetServer>,
     wall_position: Position,
 ) {
+    let texture_handle = asset_server.load("LunarLander/Moon Tiles/MoonTile_square.png");
     commands
         .spawn_bundle(SpriteBundle {
-            material: materials.add(wall_color.into()),
+            material: materials.add(texture_handle.into()),
+            sprite: Sprite::new(Vec2::new(SPRITE_WIDTH as f32, SPRITE_HEIGHT as f32)),
+            ..Default::default()
+        })
+        .insert(Wall {})
+        .insert(wall_position)
+        .insert(Size::square(0.9));
+}
+
+fn spawn_crumbel(
+    commands: &mut Commands,
+    materials: &mut ResMut<Assets<ColorMaterial>>,
+    asset_server: &Res<AssetServer>,
+    wall_position: Position,
+    index: usize
+) {
+    let path = format!("LunarLander/Space Background/debris_{}.png", index % 6);
+    let texture_handle = asset_server.load(&path[..]);
+    commands
+        .spawn_bundle(SpriteBundle {
+            material: materials.add(texture_handle.into()),
             sprite: Sprite::new(Vec2::new(SPRITE_WIDTH as f32, SPRITE_HEIGHT as f32)),
             ..Default::default()
         })
@@ -131,18 +151,17 @@ fn setup(
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
 
     // Add border walls
-    let wall_color = Color::rgb(0.8, 0.8, 0.8);
     for y in 0..ARENA_HEIGHT as i32 {
         spawn_wall(
             &mut commands,
             &mut materials,
-            wall_color,
+            &asset_server,
             Position { x: 0, y },
         );
         spawn_wall(
             &mut commands,
             &mut materials,
-            wall_color,
+            &asset_server,
             Position {
                 x: ARENA_WIDTH as i32 - 1,
                 y,
@@ -153,13 +172,13 @@ fn setup(
         spawn_wall(
             &mut commands,
             &mut materials,
-            wall_color,
+            &asset_server,
             Position { x, y: 0 },
         );
         spawn_wall(
             &mut commands,
             &mut materials,
-            wall_color,
+            &asset_server,
             Position {
                 x,
                 y: ARENA_HEIGHT as i32 - 1,
@@ -174,7 +193,7 @@ fn setup(
                 y: y as i32 + 1,
             };
             if c == 'W' {
-                spawn_wall(&mut commands, &mut materials, wall_color, pos);
+                spawn_wall(&mut commands, &mut materials, &asset_server, pos);
             } else if c == 'T' {
                 spawn_target(&mut commands, &mut materials, pos);
             }
@@ -272,6 +291,7 @@ fn rocket_movement(
     windows: Res<Windows>,
     mut target_writer: EventWriter<TargetEvent>,
     mut rocket_path: ResMut<RocketPath>,
+    asset_server: Res<AssetServer>,
 ) {
     let window = windows.get_primary().unwrap();
     if let Some((rocket, mut rocket_pos)) = rocket_query.iter_mut().next() {
@@ -326,7 +346,7 @@ fn rocket_movement(
                     spawn_wall(
                         &mut commands,
                         &mut materials,
-                        Color::rgb(0.4, 0.4, 0.4),
+                        &asset_server,
                         middle,
                     );
                 }
