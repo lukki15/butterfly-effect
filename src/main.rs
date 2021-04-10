@@ -13,7 +13,7 @@ const WINDOW_HEIGHT: u32 = (ARENA_HEIGHT + SCORE_BOARD_HEIGHT) * SPRITE_HEIGHT;
 const WINDOW_WIDTH: u32 = ARENA_WIDTH * SPRITE_WIDTH;
 
 #[derive(SystemLabel, Debug, Hash, PartialEq, Eq, Clone)]
-pub enum SnakeMovement {
+pub enum RocketMovement {
     Input,
     Movement,
 }
@@ -43,6 +43,7 @@ struct Rocket {
 
 struct Wall {}
 struct Target {}
+struct TargetEvent();
 
 #[derive(PartialEq, Copy, Clone)]
 enum Direction {
@@ -217,7 +218,9 @@ fn rocket_movement_input(keyboard_input: Res<Input<KeyCode>>, mut rockets: Query
 fn rocket_movement(
     mut rocket_query: Query<(&Rocket, &mut Position)>,
     collider_query: Query<&Transform, With<Wall>>,
-    windows: Res<Windows>
+    target_query: Query<&Transform, With<Target>>,
+    windows: Res<Windows>,
+    mut target_writer: EventWriter<TargetEvent>,
 ) {
     let window = windows.get_primary().unwrap();
     if let Some((rocket, mut rocket_pos)) = rocket_query.iter_mut().next() {
@@ -248,22 +251,29 @@ fn rocket_movement(
         };
 
         let mut no_collision = true;
-        
-        for wall_transform in collider_query.iter(){
-            
+
+        for wall_transform in collider_query.iter() {
             let next_transform_x = convert_x(next_position.x, window.width());
-            let next_transform_y = convert_y(
-                next_position.y ,
-                window.height()
-            );
-            if wall_transform.translation.x == next_transform_x && wall_transform.translation.y == next_transform_y{
+            let next_transform_y = convert_y(next_position.y, window.height());
+            if wall_transform.translation.x == next_transform_x
+                && wall_transform.translation.y == next_transform_y
+            {
                 no_collision = false;
             }
         }
-        
         if no_collision {
             rocket_pos.x = next_position.x;
             rocket_pos.y = next_position.y;
+        }
+
+        for target_transform in target_query.iter() {
+            let next_transform_x = convert_x(next_position.x, window.width());
+            let next_transform_y = convert_y(next_position.y, window.height());
+            if target_transform.translation.x == next_transform_x
+                && target_transform.translation.y == next_transform_y
+            {
+                target_writer.send(TargetEvent {});
+            }
         }
     }
 }
@@ -284,11 +294,11 @@ fn convert(pos: f32, bound_window: f32, bound_game: f32) -> f32 {
     pos / bound_game * bound_window - (bound_window / 2.) + (tile_size / 2.)
 }
 
-fn convert_x(pos: i32, window_width: f32) -> f32{
+fn convert_x(pos: i32, window_width: f32) -> f32 {
     convert(pos as f32, window_width, ARENA_WIDTH as f32)
 }
 
-fn convert_y(pos: i32, window_height: f32) -> f32{
+fn convert_y(pos: i32, window_height: f32) -> f32 {
     convert(
         pos as f32,
         window_height,
@@ -297,17 +307,27 @@ fn convert_y(pos: i32, window_height: f32) -> f32{
 }
 
 fn position_translation(windows: Res<Windows>, mut q: Query<(&Position, &mut Transform)>) {
-
     let window = windows.get_primary().unwrap();
     for (pos, mut transform) in q.iter_mut() {
         transform.translation = Vec3::new(
             convert_x(pos.x, window.width()),
-            convert_y(
-                pos.y,
-                window.height()
-            ),
+            convert_y(pos.y, window.height()),
             0.0,
         );
+    }
+}
+
+fn reached_target(
+    mut reader: EventReader<TargetEvent>,
+    mut rocket_query: Query<(&mut Rocket, &mut Position)>,
+) {
+    if reader.iter().next().is_some() {
+        //TODO: update score
+        if let Some((mut rocket, mut rocket_pos)) = rocket_query.iter_mut().next() {
+            rocket.direction = Direction::StandStill;
+            rocket_pos.x = 1;
+            rocket_pos.y = 1;
+        }
     }
 }
 
@@ -325,20 +345,22 @@ fn main() {
         .add_system(
             rocket_movement_input
                 .system()
-                .label(SnakeMovement::Input)
-                .before(SnakeMovement::Movement),
+                .label(RocketMovement::Input)
+                .before(RocketMovement::Movement),
         )
         .add_system_set(
             SystemSet::new()
                 .with_run_criteria(FixedTimestep::step(0.050))
-                .with_system(rocket_movement.system().label(SnakeMovement::Movement)),
+                .with_system(rocket_movement.system().label(RocketMovement::Movement)),
         )
+        .add_system(reached_target.system().after(RocketMovement::Movement))
         .add_system_set_to_stage(
             CoreStage::PostUpdate,
             SystemSet::new()
                 .with_system(position_translation.system())
                 .with_system(size_scaling.system()),
         )
+        .add_event::<TargetEvent>()
         .add_plugins(DefaultPlugins);
 
     #[cfg(target_arch = "wasm32")]
