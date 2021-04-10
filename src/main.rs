@@ -2,14 +2,15 @@ use bevy::core::FixedTimestep;
 use bevy::prelude::*;
 use bevy::render::pass::ClearColor;
 
-const WINDOW_HEIGHT: u32 = 500;
-const WINDOW_WIDTH: u32 = 500;
+const SCORE_BOARD_HEIGHT: u32 = 2;
+const ARENA_HEIGHT: u32 = 16;
+const ARENA_WIDTH: u32 = 24;
 
-const ARENA_HEIGHT: u32 = 10;
-const ARENA_WIDTH: u32 = 10;
+const SPRITE_HEIGHT: u32 = 32;
+const SPRITE_WIDTH: u32 = 32;
 
-const SPRITE_HEIGHT: u32 = WINDOW_HEIGHT / ARENA_HEIGHT;
-const SPRITE_WIDTH: u32 = WINDOW_WIDTH / ARENA_WIDTH;
+const WINDOW_HEIGHT: u32 = (ARENA_HEIGHT + SCORE_BOARD_HEIGHT) * SPRITE_HEIGHT;
+const WINDOW_WIDTH: u32 = ARENA_WIDTH * SPRITE_WIDTH;
 
 #[derive(SystemLabel, Debug, Hash, PartialEq, Eq, Clone)]
 pub enum SnakeMovement {
@@ -40,6 +41,8 @@ struct Rocket {
     direction: Direction,
 }
 
+struct Wall {}
+struct Target {}
 
 #[derive(PartialEq, Copy, Clone)]
 enum Direction {
@@ -60,8 +63,122 @@ impl Direction {
     }
 }
 
-fn setup(mut commands: Commands) {
+fn spawn_wall(
+    commands: &mut Commands,
+    materials: &mut ResMut<Assets<ColorMaterial>>,
+    wall_color: Color,
+    wall_position: Position,
+) {
+    commands
+        .spawn_bundle(SpriteBundle {
+            material: materials.add(wall_color.into()),
+            sprite: Sprite::new(Vec2::new(SPRITE_WIDTH as f32, SPRITE_HEIGHT as f32)),
+            ..Default::default()
+        })
+        .insert(Wall {})
+        .insert(wall_position)
+        .insert(Size::square(0.9));
+}
+
+fn spawn_target(
+    commands: &mut Commands,
+    materials: &mut ResMut<Assets<ColorMaterial>>,
+    wall_position: Position,
+) {
+    commands
+        .spawn_bundle(SpriteBundle {
+            material: materials.add(Color::rgb(1.0, 0.8, 0.0).into()),
+            sprite: Sprite::new(Vec2::new(SPRITE_WIDTH as f32, SPRITE_HEIGHT as f32)),
+            ..Default::default()
+        })
+        .insert(Wall {})
+        .insert(wall_position)
+        .insert(Size::square(0.9));
+}
+
+fn setup(
+    mut commands: Commands,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    asset_server: Res<AssetServer>,
+) {
+    let level_data: Vec<String> = vec![
+        "          WWWW        ".to_string(),
+        "   WWWW   WWWW        ".to_string(),
+        "   WWWW   WWWW    T   ".to_string(),
+        "   WWWW   WWWW        ".to_string(),
+        "   WWWW   WWWW        ".to_string(),
+        "   WWWW   WWWW   WWWWW".to_string(),
+        "   WWWW   WWWW   WWWWW".to_string(),
+        "   WWWW   WWWW   WWWWW".to_string(),
+        "   WWWW   WWWW   WWWWW".to_string(),
+        "   WWWW   WWWW   WWWWW".to_string(),
+        "   WWWW          WWWWW".to_string(),
+        "   WWWW          WWWWW".to_string(),
+        "   WWWW          WWWWW".to_string(),
+        "s  WWWW          WWWWW".to_string(),
+    ];
+
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
+
+    // Add border walls
+    let wall_color = Color::rgb(0.8, 0.8, 0.8);
+    for y in 0..ARENA_HEIGHT as i32 {
+        spawn_wall(
+            &mut commands,
+            &mut materials,
+            wall_color,
+            Position { x: 0, y },
+        );
+        spawn_wall(
+            &mut commands,
+            &mut materials,
+            wall_color,
+            Position {
+                x: ARENA_WIDTH as i32 - 1,
+                y,
+            },
+        );
+    }
+    for x in 1..ARENA_WIDTH as i32 - 1 {
+        spawn_wall(
+            &mut commands,
+            &mut materials,
+            wall_color,
+            Position { x, y: 0 },
+        );
+        spawn_wall(
+            &mut commands,
+            &mut materials,
+            wall_color,
+            Position {
+                x,
+                y: ARENA_HEIGHT as i32 - 1,
+            },
+        );
+    }
+
+    for (y, line_data) in level_data.iter().rev().enumerate() {
+        for (x, c) in line_data.chars().enumerate() {
+            let pos = Position {
+                x: x as i32 + 1,
+                y: y as i32 + 1,
+            };
+            if c == 'W' {
+                spawn_wall(
+                    &mut commands,
+                    &mut materials,
+                    wall_color,
+                    pos,
+                );
+            } else if c == 'T' {
+                spawn_target(
+                    &mut commands,
+                    &mut materials,
+                    pos,
+                );
+            }
+        }
+    }
 }
 
 fn spawn_rocket(
@@ -70,18 +187,18 @@ fn spawn_rocket(
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
     let texture_handle = asset_server.load("icon.png");
-        commands
-            .spawn_bundle(SpriteBundle {
-                material: materials.add(texture_handle.into()),
-                sprite: Sprite::new(Vec2::new(SPRITE_WIDTH as f32, SPRITE_HEIGHT as f32)),
-                ..Default::default()
-            })
-            .insert(Rocket {
-                direction: Direction::Up,
-            })
-            .insert(Position { x: 3, y: 3 })
-            .insert(Size::square(0.8))
-            .id();
+    commands
+        .spawn_bundle(SpriteBundle {
+            material: materials.add(texture_handle.into()),
+            sprite: Sprite::new(Vec2::new(SPRITE_WIDTH as f32, SPRITE_HEIGHT as f32)),
+            ..Default::default()
+        })
+        .insert(Rocket {
+            direction: Direction::Up,
+        })
+        .insert(Position { x: 3, y: 3 })
+        .insert(Size::square(0.8))
+        .id();
 }
 
 fn snake_movement_input(keyboard_input: Res<Input<KeyCode>>, mut heads: Query<&mut Rocket>) {
@@ -107,36 +224,36 @@ fn snake_movement(mut heads: Query<(&mut Position, &Rocket)>) {
     if let Some((mut head_pos, head)) = heads.iter_mut().next() {
         match &head.direction {
             Direction::Left => {
-                if head_pos.x > 0{
+                if head_pos.x > 0 {
                     head_pos.x -= 1;
                 }
             }
             Direction::Right => {
-                if head_pos.x < ARENA_WIDTH as i32 - 1{
+                if head_pos.x < ARENA_WIDTH as i32 - 1 {
                     head_pos.x += 1;
                 }
             }
             Direction::Up => {
-                if head_pos.y < ARENA_HEIGHT as i32 - 1{
+                if head_pos.y < ARENA_HEIGHT as i32 - 1 {
                     head_pos.y += 1;
                 }
             }
             Direction::Down => {
-                if head_pos.y > 0{
-                head_pos.y -= 1;
+                if head_pos.y > 0 {
+                    head_pos.y -= 1;
                 }
             }
         };
     }
 }
 
-
 fn size_scaling(windows: Res<Windows>, mut q: Query<(&Size, &mut Sprite)>) {
     let window = windows.get_primary().unwrap();
     for (sprite_size, mut sprite) in q.iter_mut() {
         sprite.size = Vec2::new(
             sprite_size.width / ARENA_WIDTH as f32 * window.width() as f32,
-            sprite_size.height / ARENA_HEIGHT as f32 * window.height() as f32,
+            sprite_size.height / (ARENA_HEIGHT + SCORE_BOARD_HEIGHT) as f32
+                * window.height() as f32,
         );
     }
 }
@@ -150,7 +267,11 @@ fn position_translation(windows: Res<Windows>, mut q: Query<(&Position, &mut Tra
     for (pos, mut transform) in q.iter_mut() {
         transform.translation = Vec3::new(
             convert(pos.x as f32, window.width() as f32, ARENA_WIDTH as f32),
-            convert(pos.y as f32, window.height() as f32, ARENA_HEIGHT as f32),
+            convert(
+                pos.y as f32,
+                window.height() as f32,
+                (ARENA_HEIGHT + SCORE_BOARD_HEIGHT) as f32,
+            ),
             0.0,
         );
     }
@@ -176,7 +297,7 @@ fn main() {
         .add_system_set(
             SystemSet::new()
                 .with_run_criteria(FixedTimestep::step(0.050))
-                .with_system(snake_movement.system().label(SnakeMovement::Movement))
+                .with_system(snake_movement.system().label(SnakeMovement::Movement)),
         )
         .add_system_set_to_stage(
             CoreStage::PostUpdate,
@@ -186,7 +307,7 @@ fn main() {
         )
         .add_plugins(DefaultPlugins);
 
-        #[cfg(target_arch = "wasm32")]
-        app.add_plugin(bevy_webgl2::WebGL2Plugin);
-        app.run();
+    #[cfg(target_arch = "wasm32")]
+    app.add_plugin(bevy_webgl2::WebGL2Plugin);
+    app.run();
 }
