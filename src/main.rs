@@ -1,6 +1,7 @@
 use bevy::core::FixedTimestep;
 use bevy::prelude::*;
 use bevy::render::pass::ClearColor;
+use bevy::sprite::TextureAtlas;
 
 const SCORE_BOARD_HEIGHT: u32 = 2;
 const ARENA_HEIGHT: u32 = 16;
@@ -105,7 +106,11 @@ fn spawn_target(
         .insert(Size::square(0.9));
 }
 
-fn setup(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
+fn setup(
+    mut commands: Commands,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    asset_server: Res<AssetServer>,
+) {
     let level_data: Vec<String> = vec![
         "          WWWW       T".to_string(),
         "   WWWW   WWWW        ".to_string(),
@@ -120,7 +125,7 @@ fn setup(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
         "   WWWW          WWWWW".to_string(),
         "   WWWW          WWWWW".to_string(),
         "   WWWW          WWWWW".to_string(),
-        "s  WWWW          WWWWW".to_string(),
+        "s WWWWW          WWWWW".to_string(),
     ];
 
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
@@ -175,6 +180,32 @@ fn setup(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
             }
         }
     }
+
+    // scoreboard
+    commands.spawn_bundle(Text2dBundle {
+        text: Text {
+            sections: vec![
+                TextSection {
+                    value: "Score: ".to_string(),
+                    style: TextStyle {
+                        font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                        font_size: 40.0,
+                        color: Color::rgb(0.5, 0.5, 1.0),
+                    },
+                },
+                TextSection {
+                    value: "".to_string(),
+                    style: TextStyle {
+                        font: asset_server.load("fonts/FiraMono-Medium.ttf"),
+                        font_size: 40.0,
+                        color: Color::rgb(1.0, 0.5, 0.5),
+                    },
+                },
+            ],
+            ..Default::default()
+        },
+        ..Default::default()
+    }).insert(Position { x: ARENA_WIDTH as i32 / 3, y: ARENA_HEIGHT as i32 });
 }
 
 fn spawn_rocket(
@@ -184,6 +215,7 @@ fn spawn_rocket(
     mut rocket_path: ResMut<RocketPath>,
 ) {
     let texture_handle = asset_server.load("icon.png");
+    let start_position = Position {x:1, y:1};
     commands
         .spawn_bundle(SpriteBundle {
             material: materials.add(texture_handle.into()),
@@ -194,10 +226,10 @@ fn spawn_rocket(
             direction: Direction::StandStill,
             turns_left: MAX_TURNS,
         })
-        .insert(Position { x: 1, y: 1 })
+        .insert(start_position.clone())
         .insert(Size::square(0.8))
         .id();
-    rocket_path.0 = vec![];
+    rocket_path.0 = vec![start_position.clone()];
 }
 
 fn rocket_movement_input(keyboard_input: Res<Input<KeyCode>>, mut rockets: Query<&mut Rocket>) {
@@ -233,6 +265,8 @@ fn rocket_movement_input(keyboard_input: Res<Input<KeyCode>>, mut rockets: Query
     }
 }
 fn rocket_movement(
+    mut commands: Commands,
+    mut materials: ResMut<Assets<ColorMaterial>>,
     mut rocket_query: Query<(&Rocket, &mut Position)>,
     collider_query: Query<&Transform, With<Wall>>,
     target_query: Query<&Transform, With<Target>>,
@@ -283,6 +317,21 @@ fn rocket_movement(
             rocket_pos.x = next_position.x;
             rocket_pos.y = next_position.y;
             rocket_path.0.push(rocket_pos.clone());
+
+            if rocket_path.0.len() >= 3 {
+                let previous = rocket_path.0[rocket_path.0.len() - 3];
+                let middle = rocket_path.0[rocket_path.0.len() - 2];
+                let next = rocket_path.0[rocket_path.0.len() - 1];
+
+                if previous.x != next.x && previous.y != next.y {
+                    spawn_wall(
+                        &mut commands,
+                        &mut materials,
+                        Color::rgb(0.4, 0.4, 0.4),
+                        middle,
+                    );
+                }
+            }
         }
 
         for target_transform in target_query.iter() {
@@ -337,36 +386,28 @@ fn position_translation(windows: Res<Windows>, mut q: Query<(&Position, &mut Tra
 }
 
 fn reached_target(
-    mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>,
     mut reader: EventReader<TargetEvent>,
     mut rocket_query: Query<(&mut Rocket, &mut Position)>,
-    mut segments: ResMut<RocketPath>
+    mut segments: ResMut<RocketPath>,
 ) {
     if reader.iter().next().is_some() {
         //TODO: update score
         if let Some((mut rocket, mut rocket_pos)) = rocket_query.iter_mut().next() {
             rocket.direction = Direction::StandStill;
-
-            for i in 1..segments.0.len() - 1{
-                let previous = segments.0[i-1];
-                let middle = segments.0[i];
-                let next = segments.0[i+1];
-
-                if previous.x != next.x && previous.y != next.y{
-                    spawn_wall(
-                        &mut commands,
-                        &mut materials,
-                        Color::rgb(0.4,0.4,0.4),
-                        middle,
-                    );
-                }
-            }
-
             rocket.turns_left = MAX_TURNS;
             rocket_pos.x = 1;
             rocket_pos.y = 1;
             segments.0.clear();
+            segments.0.push(rocket_pos.clone());
         }
+    }
+}
+
+fn scoreboard_system(mut rocket_query: Query<&Rocket>, mut query: Query<&mut Text>) {
+    if let Some(rocket) = rocket_query.iter_mut().next() {
+        let mut text = query.single_mut().unwrap();
+        text.sections[0].value = format!("turns left: {}", rocket.turns_left);
+        println!("turns left: {}", rocket.turns_left);
     }
 }
 
@@ -382,6 +423,7 @@ fn main() {
         .insert_resource(RocketPath::default())
         .add_startup_system(setup.system())
         .add_startup_stage("game_setup", SystemStage::single(spawn_rocket.system()))
+        .add_system(scoreboard_system.system())
         .add_system(
             rocket_movement_input
                 .system()
