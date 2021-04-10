@@ -186,10 +186,10 @@ fn setup(
         text: Text {
             sections: vec![
                 TextSection {
-                    value: "Score: ".to_string(),
+                    value: "turns left: ".to_string(),
                     style: TextStyle {
-                        font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-                        font_size: 40.0,
+                        font: asset_server.load("fonts/press-start/prstart.ttf"),
+                        font_size: 20.0,
                         color: Color::rgb(0.5, 0.5, 1.0),
                     },
                 },
@@ -197,7 +197,7 @@ fn setup(
                     value: "".to_string(),
                     style: TextStyle {
                         font: asset_server.load("fonts/FiraMono-Medium.ttf"),
-                        font_size: 40.0,
+                        font_size: 20.0,
                         color: Color::rgb(1.0, 0.5, 0.5),
                     },
                 },
@@ -205,7 +205,7 @@ fn setup(
             ..Default::default()
         },
         ..Default::default()
-    }).insert(Position { x: ARENA_WIDTH as i32 / 3, y: ARENA_HEIGHT as i32 });
+    }).insert(Position { x: ARENA_WIDTH as i32 / 3 + 1, y: ARENA_HEIGHT as i32 });
 }
 
 fn spawn_rocket(
@@ -214,7 +214,7 @@ fn spawn_rocket(
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut rocket_path: ResMut<RocketPath>,
 ) {
-    let texture_handle = asset_server.load("icon.png");
+    let texture_handle = asset_server.load("LunarLander/Ships/Spaceships_green_4.png");
     let start_position = Position {x:1, y:1};
     commands
         .spawn_bundle(SpriteBundle {
@@ -261,7 +261,6 @@ fn rocket_movement_input(keyboard_input: Res<Input<KeyCode>>, mut rockets: Query
         if rocket.direction != old_dir {
             rocket.turns_left -= 1;
         }
-        println!("turns left: {}", rocket.turns_left);
     }
 }
 fn rocket_movement(
@@ -385,6 +384,18 @@ fn position_translation(windows: Res<Windows>, mut q: Query<(&Position, &mut Tra
     }
 }
 
+fn rotation_translation(mut q: Query<(&mut Transform, &Rocket)>){
+    for (mut transform, rocket) in q.iter_mut() {
+        transform.rotation = match rocket.direction {
+            Direction::Right => Quat::from_rotation_z(0.0),
+            Direction::Down => Quat::from_rotation_z(-std::f32::consts::PI*0.5),
+            Direction::Left => Quat::from_rotation_z(std::f32::consts::PI),
+            Direction::Up => Quat::from_rotation_z(std::f32::consts::PI*0.5),
+            _ => Quat::from_rotation_z(0.0)
+        };
+    }
+}
+
 fn reached_target(
     mut reader: EventReader<TargetEvent>,
     mut rocket_query: Query<(&mut Rocket, &mut Position)>,
@@ -407,7 +418,6 @@ fn scoreboard_system(mut rocket_query: Query<&Rocket>, mut query: Query<&mut Tex
     if let Some(rocket) = rocket_query.iter_mut().next() {
         let mut text = query.single_mut().unwrap();
         text.sections[0].value = format!("turns left: {}", rocket.turns_left);
-        println!("turns left: {}", rocket.turns_left);
     }
 }
 
@@ -439,8 +449,9 @@ fn main() {
         .add_system_set_to_stage(
             CoreStage::PostUpdate,
             SystemSet::new()
-                .with_system(position_translation.system())
-                .with_system(size_scaling.system()),
+            .with_system(position_translation.system())
+            .with_system(rotation_translation.system())
+            .with_system(size_scaling.system()),
         )
         .add_event::<TargetEvent>()
         .add_plugins(DefaultPlugins);
