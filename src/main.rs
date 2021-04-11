@@ -18,6 +18,8 @@ const MAX_TURNS: u32 = 10;
 pub enum RocketMovement {
     Input,
     Movement,
+    Reset,
+    Target,
 }
 
 #[derive(Default, Copy, Clone, Eq, PartialEq, Hash)]
@@ -45,11 +47,21 @@ struct Rocket {
 }
 
 #[derive(Default)]
-struct RocketPath(Vec<Position>);
+struct RocketPath(Vec<Position>, Vec<Entity>);
 
 struct Wall {}
 struct Target {}
 struct TargetEvent();
+
+struct ResetEvent();
+
+struct NextLevelEvent();
+
+#[derive(Default)]
+struct LevelInfo {
+    current_level: usize,
+    counter_completion: u32,
+}
 
 #[derive(PartialEq, Copy, Clone)]
 enum Direction {
@@ -77,7 +89,7 @@ fn spawn_wall(
     materials: &mut ResMut<Assets<ColorMaterial>>,
     asset_server: &Res<AssetServer>,
     wall_position: Position,
-) {
+) -> Entity {
     let texture_handle = asset_server.load("LunarLander/Moon Tiles/MoonTile_square.png");
     commands
         .spawn_bundle(SpriteBundle {
@@ -87,15 +99,16 @@ fn spawn_wall(
         })
         .insert(Wall {})
         .insert(wall_position)
-        .insert(Size::square(0.9));
+        .insert(Size::square(0.9))
+        .id()
 }
 
-fn spawn_crumbel(
+fn _spawn_debris(
     commands: &mut Commands,
     materials: &mut ResMut<Assets<ColorMaterial>>,
     asset_server: &Res<AssetServer>,
     wall_position: Position,
-    index: usize
+    index: usize,
 ) {
     let path = format!("LunarLander/Space Background/debris_{}.png", index % 6);
     let texture_handle = asset_server.load(&path[..]);
@@ -126,12 +139,85 @@ fn spawn_target(
         .insert(Size::square(0.9));
 }
 
-fn setup(
-    mut commands: Commands,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-    asset_server: Res<AssetServer>,
+fn spawn_border(
+    commands: &mut Commands,
+    materials: &mut ResMut<Assets<ColorMaterial>>,
+    asset_server: &Res<AssetServer>,
 ) {
-    let level_data: Vec<String> = vec![
+    for y in 0..ARENA_HEIGHT as i32 {
+        spawn_wall(commands, materials, asset_server, Position { x: 0, y });
+        spawn_wall(
+            commands,
+            materials,
+            asset_server,
+            Position {
+                x: ARENA_WIDTH as i32 - 1,
+                y,
+            },
+        );
+    }
+    for x in 1..ARENA_WIDTH as i32 - 1 {
+        spawn_wall(commands, materials, asset_server, Position { x, y: 0 });
+        spawn_wall(
+            commands,
+            materials,
+            asset_server,
+            Position {
+                x,
+                y: ARENA_HEIGHT as i32 - 1,
+            },
+        );
+    }
+}
+
+fn load_game_over(
+    commands: &mut Commands,
+    materials: &mut ResMut<Assets<ColorMaterial>>,
+    asset_server: &Res<AssetServer>,
+)  {
+    let game_over_data = vec![
+        "                     ".to_string(),
+        "  WWW  WWW W   W WWW ".to_string(),
+        "  W    W W WW WW W   ".to_string(),
+        "  W WW WWW W W W WWW ".to_string(),
+        "  W  W W W W   W W   ".to_string(),
+        "  WWWW W W W   W WWW ".to_string(),
+        "                     ".to_string(),
+        "   WWW  W W WWW WWW  ".to_string(),
+        "   W W  W W W   W W  ".to_string(),
+        "   W W  W W WWW WWW  ".to_string(),
+        "   W W  W W W   WW   ".to_string(),
+        "   WWW   W  WWW W W  ".to_string(),
+        "                     ".to_string(),
+        "                     ".to_string(),
+    ];
+
+    load_level_from_data(commands, materials, asset_server, &game_over_data);
+}
+
+fn load_level(
+    commands: &mut Commands,
+    materials: &mut ResMut<Assets<ColorMaterial>>,
+    asset_server: &Res<AssetServer>,
+    current_level: usize,
+) {
+    let level_data_0: Vec<String> = vec![
+        "WWWWWWWWWWW WWWWWWWWWT".to_string(),
+        "WWWWWWWWWW   WWWWWWWW ".to_string(),
+        "WWWWWWWWW             ".to_string(),
+        "WWWWWWWWWW   WWWWWWWW ".to_string(),
+        "WWWWWWWWWWW WWWWWWWWW ".to_string(),
+        "WWWWWWWWWWW WWWWWWWW  ".to_string(),
+        "                      ".to_string(),
+        "  WWWWWWWWW WWWWWWWWWW".to_string(),
+        " WWWWWWWWWW WWWWWWWWWW".to_string(),
+        " WWWWWWWWW  WWWWWWWWWW".to_string(),
+        "            WWWWWWWWWW".to_string(),
+        " WWWWWWWWW  WWWWWWWWWW".to_string(),
+        " WWWWWWWWWW WWWWWWWWWW".to_string(),
+        "SWWWWWWWWWWWWWWWWWWWWW".to_string(),
+    ];
+    let level_data_1: Vec<String> = vec![
         "          WWWW       T".to_string(),
         "   WWWW   WWWW        ".to_string(),
         "   WWWW   WWWW        ".to_string(),
@@ -148,44 +234,43 @@ fn setup(
         "s WWWWW          WWWWW".to_string(),
     ];
 
-    commands.spawn_bundle(OrthographicCameraBundle::new_2d());
+    let you_won = vec![
+        "                     ".to_string(),
+        "    W W  WWW  W W    ".to_string(),
+        "    W W  W W  W W    ".to_string(),
+        "     W   W W  W W    ".to_string(),
+        "     W   W W  W W    ".to_string(),
+        "     W   WWW  WWW    ".to_string(),
+        "                     ".to_string(),
+        "                     ".to_string(),
+        "   W   W WWW WW  W   ".to_string(),
+        "   W   W W W WW  W   ".to_string(),
+        "   W   W W W W W W   ".to_string(),
+        "   W W W W W W  WW   ".to_string(),
+        "    W W  WWW W  WW   ".to_string(),
+        "                     ".to_string(),
+    ];
 
-    // Add border walls
-    for y in 0..ARENA_HEIGHT as i32 {
-        spawn_wall(
-            &mut commands,
-            &mut materials,
-            &asset_server,
-            Position { x: 0, y },
-        );
-        spawn_wall(
-            &mut commands,
-            &mut materials,
-            &asset_server,
-            Position {
-                x: ARENA_WIDTH as i32 - 1,
-                y,
-            },
-        );
-    }
-    for x in 1..ARENA_WIDTH as i32 - 1 {
-        spawn_wall(
-            &mut commands,
-            &mut materials,
-            &asset_server,
-            Position { x, y: 0 },
-        );
-        spawn_wall(
-            &mut commands,
-            &mut materials,
-            &asset_server,
-            Position {
-                x,
-                y: ARENA_HEIGHT as i32 - 1,
-            },
-        );
+    let levels = vec![&level_data_0, &level_data_1];
+
+    let current_level_data = levels.get(current_level);
+    let level_data: &Vec<String>;
+
+    if let Some(data) = current_level_data {
+        level_data = data;
+    } else {
+        level_data = &you_won;
     }
 
+    load_level_from_data(commands, materials, asset_server, level_data);
+}
+
+fn load_level_from_data(
+    commands: &mut Commands,
+    materials: &mut ResMut<Assets<ColorMaterial>>,
+    asset_server: &Res<AssetServer>,
+    level_data: &Vec<String>,
+) {
     for (y, line_data) in level_data.iter().rev().enumerate() {
         for (x, c) in line_data.chars().enumerate() {
             let pos = Position {
@@ -193,38 +278,87 @@ fn setup(
                 y: y as i32 + 1,
             };
             if c == 'W' {
-                spawn_wall(&mut commands, &mut materials, &asset_server, pos);
+                spawn_wall(commands, materials, asset_server, pos);
             } else if c == 'T' {
-                spawn_target(&mut commands, &mut materials, pos);
+                spawn_target(commands, materials, pos);
             }
         }
     }
+}
+
+fn load_next_level(
+    mut commands: Commands,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    asset_server: Res<AssetServer>,
+    wall_query: Query<Entity, With<Wall>>,
+    target_query: Query<Entity, With<Target>>,
+    mut level_info: ResMut<LevelInfo>,
+    mut reader: EventReader<NextLevelEvent>,
+) {
+    if reader.iter().next().is_some() {
+        // unload all walls
+        for wall in wall_query.iter() {
+            commands.entity(wall).despawn();
+        }
+
+        for target in target_query.iter() {
+            commands.entity(target).despawn();
+        }
+
+        level_info.current_level += 1;
+        level_info.counter_completion = 0;
+
+        spawn_border(&mut commands, &mut materials, &asset_server);
+        load_level(
+            &mut commands,
+            &mut materials,
+            &asset_server,
+            level_info.current_level,
+        );
+    }
+}
+
+fn setup(
+    mut commands: Commands,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    asset_server: Res<AssetServer>,
+    mut level_info: ResMut<LevelInfo>,
+) {
+    commands.spawn_bundle(OrthographicCameraBundle::new_2d());
+
+    // Add border walls
+    level_info.current_level = 0;
+    level_info.counter_completion = 0;
+    spawn_border(&mut commands, &mut materials, &asset_server);
+    load_level(
+        &mut commands,
+        &mut materials,
+        &asset_server,
+        level_info.current_level,
+    );
 
     // scoreboard
-    commands.spawn_bundle(Text2dBundle {
-        text: Text {
-            sections: vec![
-                TextSection {
-                    value: "turns left: ".to_string(),
-                    style: TextStyle {
-                        font: asset_server.load("fonts/press-start/prstart.ttf"),
-                        font_size: 20.0,
-                        color: Color::rgb(0.5, 0.5, 1.0),
-                    },
-                },
-                TextSection {
-                    value: "".to_string(),
-                    style: TextStyle {
-                        font: asset_server.load("fonts/FiraMono-Medium.ttf"),
-                        font_size: 20.0,
-                        color: Color::rgb(1.0, 0.5, 0.5),
-                    },
-                },
-            ],
+    commands
+        .spawn_bundle(Text2dBundle {
+            text: Text {
+                sections: vec![
+                    TextSection {
+                        value: "turns left: ".to_string(),
+                        style: TextStyle {
+                            font: asset_server.load("fonts/press-start/prstart.ttf"),
+                            font_size: 20.0,
+                            color: Color::rgb(0.1, 0.1, 0.50),
+                        },
+                    }
+                ],
+                ..Default::default()
+            },
             ..Default::default()
-        },
-        ..Default::default()
-    }).insert(Position { x: ARENA_WIDTH as i32 / 3 + 1, y: ARENA_HEIGHT as i32 });
+        })
+        .insert(Position {
+            x: ARENA_WIDTH as i32 / 3 + 1,
+            y: ARENA_HEIGHT as i32,
+        });
 }
 
 fn spawn_rocket(
@@ -234,7 +368,7 @@ fn spawn_rocket(
     mut rocket_path: ResMut<RocketPath>,
 ) {
     let texture_handle = asset_server.load("LunarLander/Ships/Spaceships_green_4.png");
-    let start_position = Position {x:1, y:1};
+    let start_position = Position { x: 1, y: 1 };
     commands
         .spawn_bundle(SpriteBundle {
             material: materials.add(texture_handle.into()),
@@ -249,6 +383,7 @@ fn spawn_rocket(
         .insert(Size::square(0.8))
         .id();
     rocket_path.0 = vec![start_position.clone()];
+    rocket_path.1 = vec![];
 }
 
 fn rocket_movement_input(keyboard_input: Res<Input<KeyCode>>, mut rockets: Query<&mut Rocket>) {
@@ -292,6 +427,7 @@ fn rocket_movement(
     mut target_writer: EventWriter<TargetEvent>,
     mut rocket_path: ResMut<RocketPath>,
     asset_server: Res<AssetServer>,
+    mut level_info: ResMut<LevelInfo>,
 ) {
     let window = windows.get_primary().unwrap();
     if let Some((rocket, mut rocket_pos)) = rocket_query.iter_mut().next() {
@@ -343,12 +479,12 @@ fn rocket_movement(
                 let next = rocket_path.0[rocket_path.0.len() - 1];
 
                 if previous.x != next.x && previous.y != next.y {
-                    spawn_wall(
+                    rocket_path.1.push(spawn_wall(
                         &mut commands,
                         &mut materials,
                         &asset_server,
                         middle,
-                    );
+                    ));
                 }
             }
         }
@@ -359,6 +495,7 @@ fn rocket_movement(
             if target_transform.translation.x == next_transform_x
                 && target_transform.translation.y == next_transform_y
             {
+                level_info.counter_completion += 1;
                 target_writer.send(TargetEvent {});
             }
         }
@@ -404,14 +541,14 @@ fn position_translation(windows: Res<Windows>, mut q: Query<(&Position, &mut Tra
     }
 }
 
-fn rotation_translation(mut q: Query<(&mut Transform, &Rocket)>){
+fn rotation_translation(mut q: Query<(&mut Transform, &Rocket)>) {
     for (mut transform, rocket) in q.iter_mut() {
         transform.rotation = match rocket.direction {
             Direction::Right => Quat::from_rotation_z(0.0),
-            Direction::Down => Quat::from_rotation_z(-std::f32::consts::PI*0.5),
+            Direction::Down => Quat::from_rotation_z(-std::f32::consts::PI * 0.5),
             Direction::Left => Quat::from_rotation_z(std::f32::consts::PI),
-            Direction::Up => Quat::from_rotation_z(std::f32::consts::PI*0.5),
-            _ => Quat::from_rotation_z(0.0)
+            Direction::Up => Quat::from_rotation_z(std::f32::consts::PI * 0.5),
+            _ => Quat::from_rotation_z(0.0),
         };
     }
 }
@@ -420,6 +557,8 @@ fn reached_target(
     mut reader: EventReader<TargetEvent>,
     mut rocket_query: Query<(&mut Rocket, &mut Position)>,
     mut segments: ResMut<RocketPath>,
+    mut next_level_writer: EventWriter<NextLevelEvent>,
+    level_info: Res<LevelInfo>,
 ) {
     if reader.iter().next().is_some() {
         //TODO: update score
@@ -430,6 +569,11 @@ fn reached_target(
             rocket_pos.y = 1;
             segments.0.clear();
             segments.0.push(rocket_pos.clone());
+            segments.1.clear();
+
+            if level_info.counter_completion > 2 {
+                next_level_writer.send(NextLevelEvent {});
+            }
         }
     }
 }
@@ -438,6 +582,29 @@ fn scoreboard_system(mut rocket_query: Query<&Rocket>, mut query: Query<&mut Tex
     if let Some(rocket) = rocket_query.iter_mut().next() {
         let mut text = query.single_mut().unwrap();
         text.sections[0].value = format!("turns left: {}", rocket.turns_left);
+    }
+}
+
+fn reset_input(keyboard_input: Res<Input<KeyCode>>, mut reset_writer: EventWriter<ResetEvent>) {
+    if keyboard_input.pressed(KeyCode::R) {
+        reset_writer.send(ResetEvent {});
+    }
+}
+
+fn reset_last_one(
+    mut commands: Commands,
+    mut reader: EventReader<ResetEvent>,
+    mut target_writer: EventWriter<TargetEvent>,
+    mut rocket_path: ResMut<RocketPath>,
+) {
+    if reader.iter().next().is_some() {
+        for i in 0..rocket_path.1.len() {
+            let wall = rocket_path.1[i];
+            commands.entity(wall).despawn();
+        }
+        rocket_path.1.clear();
+
+        target_writer.send(TargetEvent {});
     }
 }
 
@@ -451,6 +618,7 @@ fn main() {
             ..Default::default()
         })
         .insert_resource(RocketPath::default())
+        .insert_resource(LevelInfo::default())
         .add_startup_system(setup.system())
         .add_startup_stage("game_setup", SystemStage::single(spawn_rocket.system()))
         .add_system(scoreboard_system.system())
@@ -465,15 +633,30 @@ fn main() {
                 .with_run_criteria(FixedTimestep::step(0.050))
                 .with_system(rocket_movement.system().label(RocketMovement::Movement)),
         )
-        .add_system(reached_target.system().after(RocketMovement::Movement))
+        .add_system(
+            reached_target
+                .system()
+                .label(RocketMovement::Target)
+                .after(RocketMovement::Movement),
+        )
+        .add_system(
+            reset_input
+                .system()
+                .label(RocketMovement::Reset)
+                .after(RocketMovement::Movement),
+        )
+        .add_system(reset_last_one.system().after(RocketMovement::Reset))
+        .add_system(load_next_level.system().after(RocketMovement::Target))
         .add_system_set_to_stage(
             CoreStage::PostUpdate,
             SystemSet::new()
-            .with_system(position_translation.system())
-            .with_system(rotation_translation.system())
-            .with_system(size_scaling.system()),
+                .with_system(position_translation.system())
+                .with_system(rotation_translation.system())
+                .with_system(size_scaling.system()),
         )
         .add_event::<TargetEvent>()
+        .add_event::<ResetEvent>()
+        .add_event::<NextLevelEvent>()
         .add_plugins(DefaultPlugins);
 
     #[cfg(target_arch = "wasm32")]
