@@ -805,6 +805,14 @@ fn path_finder(
     }
 }
 
+fn audio_system(
+    asset_server: Res<AssetServer>,
+    audio: Res<Audio>,
+) {
+    let music_handle = asset_server.load("parallel_universes.mp3");
+    audio.play(music_handle);
+}
+
 fn main() {
     let mut app = App::build();
     app.insert_resource(ClearColor(Color::rgb(0.04, 0.04, 0.04)))
@@ -819,6 +827,7 @@ fn main() {
         .add_startup_system(setup.system())
         .add_startup_system(setup_scoreboard.system())
         .add_startup_stage("game_setup", SystemStage::single(spawn_rocket.system()))
+        .add_startup_system(audio_system.system())
         .add_system(scoreboard_system.system())
         .add_system(
             rocket_movement_input

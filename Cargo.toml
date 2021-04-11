@@ -8,10 +8,12 @@ repository = "https://github.com/lukki15/butterfly-effect"
 
 [features]
 default = [
+  "bevy/bevy_audio",
   "bevy/bevy_gltf",
   "bevy/bevy_winit",
   "bevy/render",
   "bevy/png",
+  "bevy/mp3",
 ]
 
 native = [
