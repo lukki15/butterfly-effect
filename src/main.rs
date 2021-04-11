@@ -20,6 +20,8 @@ pub enum RocketMovement {
     Movement,
     Reset,
     Target,
+    Loading,
+    Path,
 }
 
 #[derive(Default, Copy, Clone, Eq, PartialEq, Hash)]
@@ -52,10 +54,12 @@ struct RocketPath(Vec<Position>, Vec<Entity>);
 struct Wall {}
 struct Target {}
 struct TargetEvent();
+struct FindPathEvent();
 
 struct ResetEvent();
 
 struct NextLevelEvent();
+struct GameOverEvent();
 
 #[derive(Default)]
 struct LevelInfo {
@@ -171,28 +175,47 @@ fn spawn_border(
 }
 
 fn load_game_over(
-    commands: &mut Commands,
-    materials: &mut ResMut<Assets<ColorMaterial>>,
-    asset_server: &Res<AssetServer>,
-)  {
-    let game_over_data = vec![
-        "                     ".to_string(),
-        "  WWW  WWW W   W WWW ".to_string(),
-        "  W    W W WW WW W   ".to_string(),
-        "  W WW WWW W W W WWW ".to_string(),
-        "  W  W W W W   W W   ".to_string(),
-        "  WWWW W W W   W WWW ".to_string(),
-        "                     ".to_string(),
-        "   WWW  W W WWW WWW  ".to_string(),
-        "   W W  W W W   W W  ".to_string(),
-        "   W W  W W WWW WWW  ".to_string(),
-        "   W W  W W W   WW   ".to_string(),
-        "   WWW   W  WWW W W  ".to_string(),
-        "                     ".to_string(),
-        "                     ".to_string(),
-    ];
+    mut commands: Commands,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    asset_server: Res<AssetServer>,
+    wall_query: Query<Entity, With<Wall>>,
+    target_query: Query<Entity, With<Target>>,
+    mut reader: EventReader<GameOverEvent>,
+) {
+    if reader.iter().next().is_some() {
+        // unload all walls
+        for wall in wall_query.iter() {
+            commands.entity(wall).despawn();
+        }
 
-    load_level_from_data(commands, materials, asset_server, &game_over_data);
+        for target in target_query.iter() {
+            commands.entity(target).despawn();
+        }
+
+        let game_over_data = vec![
+            "                     ".to_string(),
+            "  WWW  WWW W   W WWW ".to_string(),
+            "  W    W W WW WW W   ".to_string(),
+            "  W WW WWW W W W WWW ".to_string(),
+            "  W  W W W W   W W   ".to_string(),
+            "  WWWW W W W   W WWW ".to_string(),
+            "                     ".to_string(),
+            "   WWW  W W WWW WWW  ".to_string(),
+            "   W W  W W W   W W  ".to_string(),
+            "   W W  W W WWW WWW  ".to_string(),
+            "   W W  W W W   WW   ".to_string(),
+            "   WWW   W  WWW W W  ".to_string(),
+            "                     ".to_string(),
+            "                     ".to_string(),
+        ];
+
+        load_level_from_data(
+            &mut commands,
+            &mut materials,
+            &asset_server,
+            &game_over_data,
+        );
+    }
 }
 
 fn load_level(
@@ -243,11 +266,11 @@ fn load_level(
         "     W   WWW  WWW    ".to_string(),
         "                     ".to_string(),
         "                     ".to_string(),
-        "   W   W WWW WW  W   ".to_string(),
+        "   W   W WWW W   W   ".to_string(),
         "   W   W W W WW  W   ".to_string(),
         "   W   W W W W W W   ".to_string(),
         "   W W W W W W  WW   ".to_string(),
-        "    W W  WWW W  WW   ".to_string(),
+        "    W W  WWW W   W   ".to_string(),
         "                     ".to_string(),
     ];
 
@@ -341,16 +364,14 @@ fn setup(
     commands
         .spawn_bundle(Text2dBundle {
             text: Text {
-                sections: vec![
-                    TextSection {
-                        value: "turns left: ".to_string(),
-                        style: TextStyle {
-                            font: asset_server.load("fonts/press-start/prstart.ttf"),
-                            font_size: 20.0,
-                            color: Color::rgb(0.1, 0.1, 0.50),
-                        },
-                    }
-                ],
+                sections: vec![TextSection {
+                    value: "turns left: ".to_string(),
+                    style: TextStyle {
+                        font: asset_server.load("fonts/press-start/prstart.ttf"),
+                        font_size: 20.0,
+                        color: Color::rgb(0.1, 0.1, 0.50),
+                    },
+                }],
                 ..Default::default()
             },
             ..Default::default()
@@ -559,6 +580,7 @@ fn reached_target(
     mut segments: ResMut<RocketPath>,
     mut next_level_writer: EventWriter<NextLevelEvent>,
     level_info: Res<LevelInfo>,
+    mut find_path_event: EventWriter<FindPathEvent>,
 ) {
     if reader.iter().next().is_some() {
         //TODO: update score
@@ -573,6 +595,8 @@ fn reached_target(
 
             if level_info.counter_completion > 2 {
                 next_level_writer.send(NextLevelEvent {});
+            } else {
+                find_path_event.send(FindPathEvent {});
             }
         }
     }
@@ -605,6 +629,55 @@ fn reset_last_one(
         rocket_path.1.clear();
 
         target_writer.send(TargetEvent {});
+    }
+}
+
+use petgraph::algo::dijkstra;
+use petgraph::graph::{NodeIndex, UnGraph};
+
+fn path_finder(
+    wall_query: Query<&Position, With<Wall>>,
+    target_query: Query<&Position, With<Target>>,
+    mut reader: EventReader<FindPathEvent>,
+    mut game_over_writer: EventWriter<GameOverEvent>,
+) {
+    if reader.iter().next().is_some() {
+        for target_position in target_query.iter() {
+            let target_node: u32 =
+                target_position.x as u32 * ARENA_WIDTH + target_position.y as u32;
+            let mut array = [[true; ARENA_HEIGHT as usize]; ARENA_WIDTH as usize];
+
+            for wall_position in wall_query.iter() {
+                array[wall_position.x as usize][wall_position.y as usize] = false;
+            }
+
+            let mut edges: Vec<(u32, u32)> = vec![];
+            for x in 1..ARENA_WIDTH - 1 {
+                for y in 1..ARENA_HEIGHT - 1 {
+                    if array[x as usize][y as usize] && array[x as usize + 1][y as usize] {
+                        edges.push((x * ARENA_WIDTH + y, (x + 1) * ARENA_WIDTH + y));
+                    }
+                    if array[x as usize][y as usize] && array[x as usize][y as usize + 1] {
+                        edges.push((x * ARENA_WIDTH + y, x * ARENA_WIDTH + y + 1));
+                    }
+                }
+            }
+
+            let g = UnGraph::<i32, ()>::from_edges(&edges);
+
+            // Find the shortest path from source to tarte using `1` as the cost for every edge.
+            let node_map = dijkstra(
+                &g,
+                (ARENA_WIDTH + 1).into(),
+                Some(target_node.into()),
+                |_| 1,
+            );
+            if node_map.contains_key(&NodeIndex::new(target_node as usize)) {
+                return;
+            }
+        }
+
+        game_over_writer.send(GameOverEvent {});
     }
 }
 
@@ -646,7 +719,20 @@ fn main() {
                 .after(RocketMovement::Movement),
         )
         .add_system(reset_last_one.system().after(RocketMovement::Reset))
-        .add_system(load_next_level.system().after(RocketMovement::Target))
+        .add_system(
+            load_next_level
+                .system()
+                .label(RocketMovement::Loading)
+                .after(RocketMovement::Target),
+        )
+        .add_system(
+            path_finder
+                .system()
+                .label(RocketMovement::Path)
+                .after(RocketMovement::Loading)
+                .after(RocketMovement::Reset),
+        )
+        .add_system(load_game_over.system().after(RocketMovement::Path))
         .add_system_set_to_stage(
             CoreStage::PostUpdate,
             SystemSet::new()
@@ -657,6 +743,8 @@ fn main() {
         .add_event::<TargetEvent>()
         .add_event::<ResetEvent>()
         .add_event::<NextLevelEvent>()
+        .add_event::<FindPathEvent>()
+        .add_event::<GameOverEvent>()
         .add_plugins(DefaultPlugins);
 
     #[cfg(target_arch = "wasm32")]
