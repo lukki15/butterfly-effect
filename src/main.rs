@@ -257,11 +257,45 @@ fn load_level(
         "s WWWWW          WWWWW".to_string(),
     ];
 
+    let level_data_2: Vec<String> = vec![
+        "                      ".to_string(),
+        " WWWWWWWWWW WWWWWWWWW ".to_string(),
+        " WWWWWWWWWW WWWWWWWWW ".to_string(),
+        " WWWWWWWWWW WWWWWWWWW ".to_string(),
+        " WWWWWWWWWW WWWWWWWWW ".to_string(),
+        " WWWWWWWWW W WWWWWWWW ".to_string(),
+        "                      ".to_string(),
+        " WWWWWWWWW T WWWWWWWW ".to_string(),
+        " WWWWWWWWWW WWWWWWWWW ".to_string(),
+        " WWWWWWWWWW WWWWWWWWW ".to_string(),
+        " WWWWWWWWWW WWWWWWWWW ".to_string(),
+        " WWWWWWWWWW WWWWWWWWW ".to_string(),
+        " WWWWWWWWWW WWWWWWWWW ".to_string(),
+        "S                     ".to_string(),
+    ];
+
+    let level_data_3: Vec<String> = vec![
+        "          WW          ".to_string(),
+        "          WW          ".to_string(),
+        "         WTTW         ".to_string(),
+        "         W  W         ".to_string(),
+        "W    W   W  W   W    W".to_string(),
+        " TW  W  W    W  W  WT ".to_string(),
+        " W W W W  WW  W W W W ".to_string(),
+        " W  WW W W  W W WW  W ".to_string(),
+        "  W  WW  W  W  WW  W  ".to_string(),
+        "   W W    WW    W W   ".to_string(),
+        "    WW          WW    ".to_string(),
+        "     WWWWW  WWWWW     ".to_string(),
+        "        WW  WW        ".to_string(),
+        "S                     ".to_string(),
+    ];
+
     let you_won = vec![
         "                     T".to_string(),
         "     W W  WWW  W W    ".to_string(),
         "     W W  W W  W W    ".to_string(),
-        "      W   W W  W W    ".to_string(),
+        "     WWW  W W  W W    ".to_string(),
         "      W   W W  W W    ".to_string(),
         "      W   WWW  WWW    ".to_string(),
         "                      ".to_string(),
@@ -274,7 +308,7 @@ fn load_level(
         "                      ".to_string(),
     ];
 
-    let levels = vec![&level_data_0, &level_data_1];
+    let levels = vec![&level_data_0, &level_data_1, &level_data_2, &level_data_3];
 
     let current_level_data = levels.get(current_level);
     let level_data: &Vec<String>;
@@ -416,7 +450,7 @@ fn setup_scoreboard(
                     style: TextStyle {
                         font: asset_server.load("fonts/press-start/prstart.ttf"),
                         font_size: 20.0,
-                        color: Color::rgb(0.1, 0.1, 0.50),
+                        color: Color::rgb(0.125, 0.164, 0.266),
                     },
                 }],
                 ..Default::default()
