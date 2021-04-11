@@ -1,8 +1,8 @@
-# PARALLEL UNIVERSES
+# BUTTERFLY EFFECT
 
 this game got developed fo the ZenoJam3 
 
-the game can be played online: [LINK](https://lukki15.github.io/parallel-universes/)
+the game can be played online: [LINK](https://lukki15.github.io/butterfly-effect/)
 
 ## Prerequisites
 

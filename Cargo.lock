@@ -721,6 +721,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "63396b8a4b9de3f4fdfb320ab6080762242f66a8ef174c49d8e19b674db4cdbe"
 
 [[package]]
+name = "butterfly-effect"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_webgl2",
+ "petgraph",
+ "winit",
+]
+
+[[package]]
 name = "bytemuck"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2126,16 +2136,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a3c7a20e3f122223e68eef6ca58e39bc1ea8a1d83418ba4c2c1ba189d2ee355"
 dependencies = [
  "ttf-parser 0.12.0",
-]
-
-[[package]]
-name = "parallel-universes"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "bevy_webgl2",
- "petgraph",
- "winit",
 ]
 
 [[package]]

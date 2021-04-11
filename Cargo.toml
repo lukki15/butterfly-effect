@@ -1,9 +1,9 @@
 [package]
-name = "parallel-universes"
+name = "butterfly-effect"
 version = "0.1.0"
 authors = ["lukki15"]
 edition = "2018"
-repository = "https://github.com/lukki15/parallel-universes"
+repository = "https://github.com/lukki15/butterfly-effect"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]

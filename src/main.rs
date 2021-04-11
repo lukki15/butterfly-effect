@@ -809,7 +809,7 @@ fn main() {
     let mut app = App::build();
     app.insert_resource(ClearColor(Color::rgb(0.04, 0.04, 0.04)))
         .insert_resource(WindowDescriptor {
-            title: "PARALLEL UNIVERSES".to_string(),
+            title: "BUTTERFLY EFFECT".to_string(),
             width: WINDOW_WIDTH as f32,
             height: WINDOW_HEIGHT as f32,
             ..Default::default()
