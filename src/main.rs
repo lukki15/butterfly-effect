@@ -257,24 +257,58 @@ fn load_level(
         "s WWWWW          WWWWW".to_string(),
     ];
 
-    let you_won = vec![
-        "                     ".to_string(),
-        "    W W  WWW  W W    ".to_string(),
-        "    W W  W W  W W    ".to_string(),
-        "     W   W W  W W    ".to_string(),
-        "     W   W W  W W    ".to_string(),
-        "     W   WWW  WWW    ".to_string(),
-        "                     ".to_string(),
-        "                     ".to_string(),
-        "   W   W WWW W   W   ".to_string(),
-        "   W   W W W WW  W   ".to_string(),
-        "   W   W W W W W W   ".to_string(),
-        "   W W W W W W  WW   ".to_string(),
-        "    W W  WWW W   W   ".to_string(),
-        "                     ".to_string(),
+    let level_data_2: Vec<String> = vec![
+        "                      ".to_string(),
+        " WWWWWWWWWW WWWWWWWWW ".to_string(),
+        " WWWWWWWWWW WWWWWWWWW ".to_string(),
+        " WWWWWWWWWW WWWWWWWWW ".to_string(),
+        " WWWWWWWWWW WWWWWWWWW ".to_string(),
+        " WWWWWWWWW W WWWWWWWW ".to_string(),
+        "                      ".to_string(),
+        " WWWWWWWWW T WWWWWWWW ".to_string(),
+        " WWWWWWWWWW WWWWWWWWW ".to_string(),
+        " WWWWWWWWWW WWWWWWWWW ".to_string(),
+        " WWWWWWWWWW WWWWWWWWW ".to_string(),
+        " WWWWWWWWWW WWWWWWWWW ".to_string(),
+        " WWWWWWWWWW WWWWWWWWW ".to_string(),
+        "S                     ".to_string(),
     ];
 
-    let levels = vec![&level_data_0, &level_data_1];
+    let level_data_3: Vec<String> = vec![
+        "          WW          ".to_string(),
+        "          WW          ".to_string(),
+        "         WTTW         ".to_string(),
+        "         W  W         ".to_string(),
+        "W    W   W  W   W    W".to_string(),
+        " TW  W  W    W  W  WT ".to_string(),
+        " W W W W  WW  W W W W ".to_string(),
+        " W  WW W W  W W WW  W ".to_string(),
+        "  W  WW  W  W  WW  W  ".to_string(),
+        "   W W    WW    W W   ".to_string(),
+        "    WW          WW    ".to_string(),
+        "     WWWWW  WWWWW     ".to_string(),
+        "        WW  WW        ".to_string(),
+        "S                     ".to_string(),
+    ];
+
+    let you_won = vec![
+        "                     T".to_string(),
+        "     W W  WWW  W W    ".to_string(),
+        "     W W  W W  W W    ".to_string(),
+        "     WWW  W W  W W    ".to_string(),
+        "      W   W W  W W    ".to_string(),
+        "      W   WWW  WWW    ".to_string(),
+        "                      ".to_string(),
+        "                      ".to_string(),
+        "    W   W WWW W   W   ".to_string(),
+        "    W   W W W WW  W   ".to_string(),
+        "    W   W W W W W W   ".to_string(),
+        "    W W W W W W  WW   ".to_string(),
+        "     W W  WWW W   W   ".to_string(),
+        "                      ".to_string(),
+    ];
+
+    let levels = vec![&level_data_0, &level_data_1, &level_data_2, &level_data_3];
 
     let current_level_data = levels.get(current_level);
     let level_data: &Vec<String>;
@@ -341,6 +375,94 @@ fn load_next_level(
     }
 }
 
+fn setup_scoreboard(
+    mut commands: Commands,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    asset_server: Res<AssetServer>,
+) {
+    let control_w = asset_server.load("controls_w.png");
+    let control_a = asset_server.load("controls_a.png");
+    let control_s = asset_server.load("controls_s.png");
+    let control_d = asset_server.load("controls_d.png");
+    let control_r = asset_server.load("controls_r.png");
+
+    commands
+        .spawn_bundle(SpriteBundle {
+            material: materials.add(control_w.into()),
+            sprite: Sprite::new(Vec2::new(SPRITE_WIDTH as f32, SPRITE_HEIGHT as f32)),
+            ..Default::default()
+        })
+        .insert(Position {
+            x: ARENA_WIDTH as i32 / 4 * 3,
+            y: ARENA_HEIGHT as i32 + 1,
+        })
+        .insert(Size::square(0.8));
+    commands
+        .spawn_bundle(SpriteBundle {
+            material: materials.add(control_a.into()),
+            sprite: Sprite::new(Vec2::new(SPRITE_WIDTH as f32, SPRITE_HEIGHT as f32)),
+            ..Default::default()
+        })
+        .insert(Position {
+            x: ARENA_WIDTH as i32 / 4 * 3 - 1,
+            y: ARENA_HEIGHT as i32,
+        })
+        .insert(Size::square(0.8));
+    commands
+        .spawn_bundle(SpriteBundle {
+            material: materials.add(control_s.into()),
+            sprite: Sprite::new(Vec2::new(SPRITE_WIDTH as f32, SPRITE_HEIGHT as f32)),
+            ..Default::default()
+        })
+        .insert(Position {
+            x: ARENA_WIDTH as i32 / 4 * 3,
+            y: ARENA_HEIGHT as i32,
+        })
+        .insert(Size::square(0.8));
+    commands
+        .spawn_bundle(SpriteBundle {
+            material: materials.add(control_d.into()),
+            sprite: Sprite::new(Vec2::new(SPRITE_WIDTH as f32, SPRITE_HEIGHT as f32)),
+            ..Default::default()
+        })
+        .insert(Position {
+            x: ARENA_WIDTH as i32 / 4 * 3 + 1,
+            y: ARENA_HEIGHT as i32,
+        })
+        .insert(Size::square(0.8));
+    commands
+        .spawn_bundle(SpriteBundle {
+            material: materials.add(control_r.into()),
+            sprite: Sprite::new(Vec2::new(SPRITE_WIDTH as f32, SPRITE_HEIGHT as f32)),
+            ..Default::default()
+        })
+        .insert(Position {
+            x: ARENA_WIDTH as i32 / 4 * 3 + 2,
+            y: ARENA_HEIGHT as i32 + 1,
+        })
+        .insert(Size::square(0.8));
+
+    commands
+        .spawn_bundle(Text2dBundle {
+            text: Text {
+                sections: vec![TextSection {
+                    value: "turns left: ".to_string(),
+                    style: TextStyle {
+                        font: asset_server.load("fonts/press-start/prstart.ttf"),
+                        font_size: 20.0,
+                        color: Color::rgb(0.125, 0.164, 0.266),
+                    },
+                }],
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .insert(Position {
+            x: ARENA_WIDTH as i32 / 3 + 1,
+            y: ARENA_HEIGHT as i32,
+        });
+}
+
 fn setup(
     mut commands: Commands,
     mut materials: ResMut<Assets<ColorMaterial>>,
@@ -359,27 +481,6 @@ fn setup(
         &asset_server,
         level_info.current_level,
     );
-
-    // scoreboard
-    commands
-        .spawn_bundle(Text2dBundle {
-            text: Text {
-                sections: vec![TextSection {
-                    value: "turns left: ".to_string(),
-                    style: TextStyle {
-                        font: asset_server.load("fonts/press-start/prstart.ttf"),
-                        font_size: 20.0,
-                        color: Color::rgb(0.1, 0.1, 0.50),
-                    },
-                }],
-                ..Default::default()
-            },
-            ..Default::default()
-        })
-        .insert(Position {
-            x: ARENA_WIDTH as i32 / 3 + 1,
-            y: ARENA_HEIGHT as i32,
-        });
 }
 
 fn spawn_rocket(
@@ -693,6 +794,7 @@ fn main() {
         .insert_resource(RocketPath::default())
         .insert_resource(LevelInfo::default())
         .add_startup_system(setup.system())
+        .add_startup_system(setup_scoreboard.system())
         .add_startup_stage("game_setup", SystemStage::single(spawn_rocket.system()))
         .add_system(scoreboard_system.system())
         .add_system(
