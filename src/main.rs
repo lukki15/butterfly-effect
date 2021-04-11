@@ -258,20 +258,20 @@ fn load_level(
     ];
 
     let you_won = vec![
-        "                     ".to_string(),
-        "    W W  WWW  W W    ".to_string(),
-        "    W W  W W  W W    ".to_string(),
-        "     W   W W  W W    ".to_string(),
-        "     W   W W  W W    ".to_string(),
-        "     W   WWW  WWW    ".to_string(),
-        "                     ".to_string(),
-        "                     ".to_string(),
-        "   W   W WWW W   W   ".to_string(),
-        "   W   W W W WW  W   ".to_string(),
-        "   W   W W W W W W   ".to_string(),
-        "   W W W W W W  WW   ".to_string(),
-        "    W W  WWW W   W   ".to_string(),
-        "                     ".to_string(),
+        "                     T".to_string(),
+        "     W W  WWW  W W    ".to_string(),
+        "     W W  W W  W W    ".to_string(),
+        "      W   W W  W W    ".to_string(),
+        "      W   W W  W W    ".to_string(),
+        "      W   WWW  WWW    ".to_string(),
+        "                      ".to_string(),
+        "                      ".to_string(),
+        "    W   W WWW W   W   ".to_string(),
+        "    W   W W W WW  W   ".to_string(),
+        "    W   W W W W W W   ".to_string(),
+        "    W W W W W W  WW   ".to_string(),
+        "     W W  WWW W   W   ".to_string(),
+        "                      ".to_string(),
     ];
 
     let levels = vec![&level_data_0, &level_data_1];
@@ -341,26 +341,73 @@ fn load_next_level(
     }
 }
 
-fn setup(
+fn setup_scoreboard(
     mut commands: Commands,
     mut materials: ResMut<Assets<ColorMaterial>>,
     asset_server: Res<AssetServer>,
-    mut level_info: ResMut<LevelInfo>,
 ) {
-    commands.spawn_bundle(OrthographicCameraBundle::new_2d());
+    let control_w = asset_server.load("controls_w.png");
+    let control_a = asset_server.load("controls_a.png");
+    let control_s = asset_server.load("controls_s.png");
+    let control_d = asset_server.load("controls_d.png");
+    let control_r = asset_server.load("controls_r.png");
 
-    // Add border walls
-    level_info.current_level = 0;
-    level_info.counter_completion = 0;
-    spawn_border(&mut commands, &mut materials, &asset_server);
-    load_level(
-        &mut commands,
-        &mut materials,
-        &asset_server,
-        level_info.current_level,
-    );
+    commands
+        .spawn_bundle(SpriteBundle {
+            material: materials.add(control_w.into()),
+            sprite: Sprite::new(Vec2::new(SPRITE_WIDTH as f32, SPRITE_HEIGHT as f32)),
+            ..Default::default()
+        })
+        .insert(Position {
+            x: ARENA_WIDTH as i32 / 4 * 3,
+            y: ARENA_HEIGHT as i32 + 1,
+        })
+        .insert(Size::square(0.8));
+    commands
+        .spawn_bundle(SpriteBundle {
+            material: materials.add(control_a.into()),
+            sprite: Sprite::new(Vec2::new(SPRITE_WIDTH as f32, SPRITE_HEIGHT as f32)),
+            ..Default::default()
+        })
+        .insert(Position {
+            x: ARENA_WIDTH as i32 / 4 * 3 - 1,
+            y: ARENA_HEIGHT as i32,
+        })
+        .insert(Size::square(0.8));
+    commands
+        .spawn_bundle(SpriteBundle {
+            material: materials.add(control_s.into()),
+            sprite: Sprite::new(Vec2::new(SPRITE_WIDTH as f32, SPRITE_HEIGHT as f32)),
+            ..Default::default()
+        })
+        .insert(Position {
+            x: ARENA_WIDTH as i32 / 4 * 3,
+            y: ARENA_HEIGHT as i32,
+        })
+        .insert(Size::square(0.8));
+    commands
+        .spawn_bundle(SpriteBundle {
+            material: materials.add(control_d.into()),
+            sprite: Sprite::new(Vec2::new(SPRITE_WIDTH as f32, SPRITE_HEIGHT as f32)),
+            ..Default::default()
+        })
+        .insert(Position {
+            x: ARENA_WIDTH as i32 / 4 * 3 + 1,
+            y: ARENA_HEIGHT as i32,
+        })
+        .insert(Size::square(0.8));
+    commands
+        .spawn_bundle(SpriteBundle {
+            material: materials.add(control_r.into()),
+            sprite: Sprite::new(Vec2::new(SPRITE_WIDTH as f32, SPRITE_HEIGHT as f32)),
+            ..Default::default()
+        })
+        .insert(Position {
+            x: ARENA_WIDTH as i32 / 4 * 3 + 2,
+            y: ARENA_HEIGHT as i32 + 1,
+        })
+        .insert(Size::square(0.8));
 
-    // scoreboard
     commands
         .spawn_bundle(Text2dBundle {
             text: Text {
@@ -380,6 +427,26 @@ fn setup(
             x: ARENA_WIDTH as i32 / 3 + 1,
             y: ARENA_HEIGHT as i32,
         });
+}
+
+fn setup(
+    mut commands: Commands,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    asset_server: Res<AssetServer>,
+    mut level_info: ResMut<LevelInfo>,
+) {
+    commands.spawn_bundle(OrthographicCameraBundle::new_2d());
+
+    // Add border walls
+    level_info.current_level = 0;
+    level_info.counter_completion = 0;
+    spawn_border(&mut commands, &mut materials, &asset_server);
+    load_level(
+        &mut commands,
+        &mut materials,
+        &asset_server,
+        level_info.current_level,
+    );
 }
 
 fn spawn_rocket(
@@ -693,6 +760,7 @@ fn main() {
         .insert_resource(RocketPath::default())
         .insert_resource(LevelInfo::default())
         .add_startup_system(setup.system())
+        .add_startup_system(setup_scoreboard.system())
         .add_startup_stage("game_setup", SystemStage::single(spawn_rocket.system()))
         .add_system(scoreboard_system.system())
         .add_system(
