@@ -22,3 +22,8 @@ The music does not start automatically in all web browsers, you have to click on
 ```
 cargo make run
 ```
+
+## Assets:
+- Font: press-start form codeman38 (http://www.zone38.net/)
+- Art: Lunar Lander from mattwalkden (http://mattwalkden.itch.io)
+- Music: [Parallel Worlds](/assets/parallel_universes.mp3) from Leon Kerner (https://leonkerner.com/)
