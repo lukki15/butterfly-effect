@@ -805,6 +805,7 @@ fn path_finder(
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn audio_system(
     asset_server: Res<AssetServer>,
     audio: Res<Audio>,
@@ -827,7 +828,6 @@ fn main() {
         .add_startup_system(setup.system())
         .add_startup_system(setup_scoreboard.system())
         .add_startup_stage("game_setup", SystemStage::single(spawn_rocket.system()))
-        .add_startup_system(audio_system.system())
         .add_system(scoreboard_system.system())
         .add_system(
             rocket_movement_input
@@ -837,7 +837,7 @@ fn main() {
         )
         .add_system_set(
             SystemSet::new()
-                .with_run_criteria(FixedTimestep::step(0.050))
+                .with_run_criteria(FixedTimestep::step(0.10))
                 .with_system(rocket_movement.system().label(RocketMovement::Movement)),
         )
         .add_system(
@@ -883,5 +883,9 @@ fn main() {
 
     #[cfg(target_arch = "wasm32")]
     app.add_plugin(bevy_webgl2::WebGL2Plugin);
+
+    #[cfg(not(target_arch = "wasm32"))]
+    app.add_startup_system(audio_system.system());
+
     app.run();
 }
