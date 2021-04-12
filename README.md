@@ -16,6 +16,7 @@ cargo make serve
 ```
 then point your browser to http://127.0.0.1:4000/
 
+The music does not start automatically in all web browsers, you have to click on the play button manually
 
 ## Build and run native version
 ```
